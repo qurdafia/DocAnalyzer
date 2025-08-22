@@ -10,6 +10,7 @@ class OpenAIProvider(BaseLLMProvider):
             model=self.model_id,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
+            # temperature=0.2
         )
         # OpenAI's JSON mode returns a string that needs to be parsed
         return json.loads(response.choices[0].message.content)
