@@ -48,7 +48,3 @@ Thumbs.db
 .eggs/
 
 # Others
-gem_cert.pem
-gem_key.pem
-
-gemini_project/config.py

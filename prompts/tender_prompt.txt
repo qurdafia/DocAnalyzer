@@ -1,0 +1,33 @@
+Act as a senior solutions architect or manager. Based on the tender specifications and additional context below, generate a detailed proposal.
+**Information Extracted from Tender Document:**
+```json
+{extracted_data}
+```
+
+**Additional User Context:**
+"{manual_rag_text}"
+
+Return the response as a single, valid JSON object that strictly follows this schema. Do not include any text outside of the JSON object.
+{{
+  "proposal": {{
+    "title": "string",
+    "introduction": "string",
+    "analysis": {{
+      "data_relevance": "string",
+      "data_quality": "string",
+      "limitations": "string"
+    }},
+    "proposed_solution": {{
+      "methodology": "string",
+      "steps": [
+        "string",
+        "string"
+      ],
+      "technology": "string"
+    }},
+    "budget": {{
+      "cost": "string"
+    }},
+    "conclusion": "string"
+  }}
+}}

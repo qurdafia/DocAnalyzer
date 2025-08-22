@@ -1,0 +1,22 @@
+Act as an expert HR recruiter. Based on the extracted resume data and the job description provided in the 'Additional User Context', analyze the candidate's suitability.
+**Information Extracted from Tender Document:**
+```json
+{extracted_data}
+```
+**Additional User Context:**
+"{manual_rag_text}"
+
+Return a single, valid JSON object that strictly follows this schema. Do not include any text outside of the JSON object.
+{{
+  "analysis": {{
+    "summary": "string",
+    "strengths": [
+      "string",
+      "string"
+    ],
+    "weaknesses": [
+      "string"
+    ],
+    "hiring_likelihood_score": "number"
+  }}
+}}

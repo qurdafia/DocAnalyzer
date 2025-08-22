@@ -120,3 +120,15 @@ button:disabled {
   margin-bottom: 15px;
   background-color: #f9f9f9;
 }
+
+/* Add to App.css */
+.form-group-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.form-group-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}

@@ -12,7 +12,7 @@ function Login({ onLoginSuccess }) {
     setError(null);
     setIsLoading(true);
     
-    // This should be in a .env.local file in a real React app
+    // Reads the Vault address from the .env.local file
     const VAULT_ADDR = process.env.REACT_APP_VAULT_ADDR || 'http://localhost:8200';
     
     try {
@@ -28,6 +28,7 @@ function Login({ onLoginSuccess }) {
         throw new Error(data.errors[0] || 'Login failed. Check username or password.');
       }
       
+      // On success, Vault returns a client token.
       const clientToken = data.auth.client_token;
       onLoginSuccess(clientToken);
 

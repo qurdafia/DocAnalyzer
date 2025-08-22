@@ -1,48 +1,22 @@
-import os
-import json
-import time
-import requests
-import certifi
 import base64
+import json
+import yaml
+import requests
+from pathlib import Path
 from celery import shared_task
 from django.conf import settings
+from gemini_project.vault_utils import vault_client
 
-# --- Constants ---
-ABBYY_BASE_URL = "https://vantage-us.abbyy.com"
+# Import Providers
+from .abbyy_provider import AbbyyProvider
+from .llm_providers.gemini_provider import GeminiProvider
+from .llm_providers.openai_provider import OpenAIProvider
+
+from .utils import parse_abbyy_response # <-- Import from utils
 
 # --- ABBYY JSON Parser ---
-def parse_abbyy_response(raw_data):
-    """
-    Parses the verbose JSON from ABBYY Vantage and extracts only the
-    clean field names and their values.
-    """
-    clean_data = {}
-    try:
-        fields = raw_data['Transaction']['Documents'][0]['ExtractedData']['RootObject']['Fields']
-        for field in fields:
-            field_name = field.get('Name')
-            field_list = field.get('List')
-            if not field_name or not field_list:
-                continue
-            
-            if field_name == 'techSpecs':
-                clean_data[field_name] = []
-                for row in field_list:
-                    row_data = {}
-                    row_columns = row.get('Value', {}).get('Fields', [])
-                    for column in row_columns:
-                        column_name = column.get('Name')
-                        column_list = column.get('List')
-                        if column_name and column_list:
-                            row_data[column_name] = column_list[0].get('Value')
-                    if row_data:
-                        clean_data[field_name].append(row_data)
-            else:
-                clean_data[field_name] = field_list[0].get('Value')
-    except (KeyError, IndexError, TypeError) as e:
-        print(f"Error parsing ABBYY response: {e}")
-        return {"error": "Failed to parse the ABBYY JSON structure."}
-    return clean_data
+ABBYY_BASE_URL = "https://vantage-us.abbyy.com"
+
 
 # --- Helper Functions for ABBYY API V1 Workflow ---
 def get_abbyy_access_token():
@@ -59,132 +33,65 @@ def get_abbyy_access_token():
     response.raise_for_status()
     return response.json()['access_token']
 
-def create_abbyy_transaction(access_token, skill_id):
-    """Step 2: Create an empty transaction."""
-    url = f"{ABBYY_BASE_URL}/api/publicapi/v1/transactions"
-    headers = {'Authorization': f'Bearer {access_token}', 'Content-Type': 'application/json'}
-    body = {'skillId': skill_id}
-    response = requests.post(url, headers=headers, json=body, verify=False)
-    response.raise_for_status()
-    return response.json()['transactionId']
 
-def add_file_to_transaction(access_token, transaction_id, file_content, file_name, content_type):
-    """Step 3: Add the file to the created transaction."""
-    url = f"{ABBYY_BASE_URL}/api/publicapi/v1/transactions/{transaction_id}/files"
-    headers = {'Authorization': f'Bearer {access_token}'}
-    files = {'file': (file_name, file_content, content_type)}
-    response = requests.post(url, headers=headers, files=files, verify=False)
-    response.raise_for_status()
+# Provider Factory
+def get_llm_provider(provider_name, model_id, config):
+    provider_info = config['providers'][provider_name]
+    
+    # Use the new, separated path keys from the config
+    mount_point = provider_info['vault_mount_point']
+    secret_path = provider_info['vault_secret_path']
+    api_key_vault_key = provider_info['api_key_vault_key']
+    
+    api_key = vault_client.get_secret(secret_path, api_key_vault_key, mount_point=mount_point)
 
-def start_abbyy_transaction(access_token, transaction_id):
-    """Step 4: Start the transaction to begin processing."""
-    url = f"{ABBYY_BASE_URL}/api/publicapi/v1/transactions/{transaction_id}/start"
-    headers = {'Authorization': f'Bearer {access_token}'}
-    response = requests.post(url, headers=headers, json={}, verify=False)
-    response.raise_for_status()
-
-def poll_and_get_abbyy_result(access_token, transaction_id):
-    """Step 5: Poll for the result and download the final data."""
-    status_url = f"{ABBYY_BASE_URL}/api/publicapi/v1/transactions/{transaction_id}"
-    headers = {'Authorization': f'Bearer {access_token}'}
-    for _ in range(30):
-        response = requests.get(status_url, headers=headers, verify=False)
-        response.raise_for_status()
-        data = response.json()
-        status = data.get('status')
-        if status == 'Processed':
-            file_id = data['documents'][0]['resultFiles'][0]['fileId']
-            download_url = f"{ABBYY_BASE_URL}/api/publicapi/v1/transactions/{transaction_id}/files/{file_id}/download"
-            result_response = requests.get(download_url, headers=headers, verify=False)
-            result_response.raise_for_status()
-            return result_response.json()
-        elif status in ['Error', 'Cancelled', 'ProcessingFailed']:
-            raise Exception(f"ABBYY processing failed with status: {status}")
-        time.sleep(5)
-    raise Exception("ABBYY processing timed out.")
-
-# --- The Main Celery Task ---
+    if provider_name == "google":
+        return GeminiProvider(api_key, model_id, config['api_endpoints']['google_gemini'])
+    elif provider_name == "openai":
+        return OpenAIProvider(api_key, model_id)
+    else:
+        raise ValueError(f"Unknown LLM provider: {provider_name}")
+    
+# The Main Orchestrator Task
 @shared_task(bind=True)
-def process_document_analysis(self, file_content_b64, file_name, content_type, manual_rag_text):
+def process_document_analysis(self, file_content_b64, file_name, content_type, manual_rag_text, doc_type_id, model_id):
+    # 1. Load Configuration
+    config_path = Path(settings.BASE_DIR) / 'config.yaml'
+    with open(config_path, 'r') as f:
+        config_data = yaml.safe_load(f)
+
+    doc_type_config = next((item for item in config_data['document_types'] if item['id'] == doc_type_id), None)
+    model_config = next((item for item in config_data['ai_models'] if item['id'] == model_id), None)
+    
+    if not doc_type_config or not model_config:
+        raise ValueError("Invalid document type or model ID.")
+    
     file_content = base64.b64decode(file_content_b64)
 
+    # 2. ABBYY Workflow
     try:
-        # ABBYY Workflow
-        token = get_abbyy_access_token()
-        transaction_id = create_abbyy_transaction(token, settings.ABBYY_SKILL_ID)
-        add_file_to_transaction(token, transaction_id, file_content, file_name, content_type)
-        start_abbyy_transaction(token, transaction_id)
-        raw_abbyy_data = poll_and_get_abbyy_result(token, transaction_id)
+        abbyy_provider = AbbyyProvider(config_data, vault_client)
+        token = abbyy_provider.get_access_token()
+        transaction_id = abbyy_provider.create_transaction(token, doc_type_config['abbyy_skill_id'])
+        abbyy_provider.add_file_to_transaction(token, transaction_id, file_content, file_name, content_type)
+        abbyy_provider.start_transaction(token, transaction_id)
+        raw_abbyy_data = abbyy_provider.poll_and_get_result(token, transaction_id)
         extracted_data = parse_abbyy_response(raw_abbyy_data)
-        print(extracted_data)
-
     except Exception as e:
         self.update_state(state='FAILURE', meta={'exc_type': type(e).__name__, 'exc_message': str(e)})
         raise
 
+    # 3. LLM Workflow
     try:
-        # Gemini Workflow
-        model_name = "gemini-1.5-flash-latest"
-        # model_name = "gemini-2.5-pro"
-        gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+        llm_provider = get_llm_provider(model_config['provider'], model_id, config_data)
         
-        prompt = f"""
-        Act as a senior solutions architect or manager. Based on the tender specifications and additional context below, generate a detailed proposal.
-        **Information Extracted from Tender Document:**
-        ```json
-        {json.dumps(extracted_data, indent=2)}
-        ```
-        **Additional User Context:**
-        "{manual_rag_text}"
-
-        Return the response as a single, valid JSON object that strictly follows this schema:
-        {{
-            "proposal": {{
-                "title": "string",
-                "introduction": "string",
-                "analysis": {{
-                    "data_relevance": "string",
-                    "data_quality": "string",
-                    "limitations": "string"
-                }},
-                "proposed_solution": {{
-                    "methodology": "string",
-                    "steps": ["string", "string"],
-                    "technology": "string"
-                }},
-                "budget": {{ "cost": "string" }},
-                "conclusion": "string"
-            }}
-        }}
-        """
-
-        gemini_data = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "response_mime_type": "application/json",
-            }
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "X-goog-api-key": settings.GEMINI_API_KEY
-        }
-
-        gemini_response = requests.post(gemini_url, headers=headers, json=gemini_data, verify=False)
-        gemini_response.raise_for_status()
-        response_data = gemini_response.json()
-
-        if not response_data.get('candidates'):
-            block_reason = response_data.get('promptFeedback', {}).get('blockReason', 'Unknown')
-            raise ValueError(f"The response from Gemini was blocked due to safety settings. Reason: {block_reason}")
-
-        generated_text = response_data['candidates'][0]['content']['parts'][0]['text']
-        cleaned_json_string = generated_text.strip()
+        prompt_template_path = Path(settings.BASE_DIR) / doc_type_config['prompt_template']
+        with open(prompt_template_path, 'r') as f:
+            prompt_template = f.read()
+        prompt = prompt_template.format(extracted_data=json.dumps(extracted_data, indent=2), manual_rag_text=manual_rag_text)
         
-        if not cleaned_json_string:
-            raise ValueError("Gemini returned an empty text response after cleaning.")
-
-        return json.loads(cleaned_json_string)
-        
+        final_json = llm_provider.generate_analysis(prompt)
+        return final_json
     except Exception as e:
         error_message = str(e)
         if hasattr(e, 'response') and e.response is not None:

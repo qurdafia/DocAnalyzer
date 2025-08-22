@@ -1,8 +1,15 @@
-// src/components/FullAnalyzer.js (Final and Fully Resilient)
+// src/components/FullAnalyzer.js
 import React, { useState, useEffect, useRef } from 'react';
 import jsPDF from 'jspdf';
 
 function FullAnalyzer({ vaultToken }) {
+  // State for config and selections
+  const [docTypes, setDocTypes] = useState([]);
+  const [aiModels, setAiModels] = useState([]);
+  const [selectedDocType, setSelectedDocType] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  
+  // State for the main workflow
   const [documentFile, setDocumentFile] = useState(null);
   const [ragText, setRagText] = useState('');
   const [analysis, setAnalysis] = useState(null);
@@ -12,11 +19,33 @@ function FullAnalyzer({ vaultToken }) {
   const [taskId, setTaskId] = useState(null);
   const intervalRef = useRef(null);
 
-  // --- Handlers and useEffect for polling (unchanged) ---
+  // Fetch the configuration on component load
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/config/');
+        const config = await response.json();
+        if (config.document_types) {
+            setDocTypes(config.document_types);
+            setSelectedDocType(config.document_types[0]?.id); // Set default
+        }
+        if (config.ai_models) {
+            setAiModels(config.ai_models);
+            setSelectedModel(config.ai_models[0]?.id); // Set default
+        }
+      } catch (err) {
+        setError("Failed to load application configuration from the server.");
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Handler for file selection
   const handleFileChange = (e) => {
     setDocumentFile(e.target.files[0]);
   };
 
+  // Handler for submitting the form
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!documentFile) {
@@ -32,6 +61,8 @@ function FullAnalyzer({ vaultToken }) {
     const formData = new FormData();
     formData.append('document', documentFile);
     formData.append('ragText', ragText);
+    formData.append('doc_type_id', selectedDocType);
+    formData.append('model_id', selectedModel);
 
     try {
       const response = await fetch('http://localhost:8000/api/analyze/', {
@@ -49,6 +80,7 @@ function FullAnalyzer({ vaultToken }) {
     }
   };
 
+  // useEffect for polling the task status
   useEffect(() => {
     if (!taskId) {
       clearInterval(intervalRef.current);
@@ -81,8 +113,8 @@ function FullAnalyzer({ vaultToken }) {
     }, 5000);
     return () => clearInterval(intervalRef.current);
   }, [taskId, vaultToken]);
-
-  // --- REWRITTEN AND RESILIENT PDF DOWNLOAD FUNCTION ---
+  
+  // Resilient PDF download function
   const downloadPdf = () => {
     if (!analysis || !analysis.proposal) return;
 
@@ -165,22 +197,41 @@ function FullAnalyzer({ vaultToken }) {
   return (
     <div className="analyzer-container">
       <form onSubmit={handleSubmit}>
-        <div>
-          <label>1. Upload Tender Document:</label><br/>
-          <input type="file" onChange={handleFileChange} />
+        <div className="form-group-row">
+          <div className="form-group">
+            <label>1. Select Document Type:</label>
+            <select value={selectedDocType} onChange={(e) => setSelectedDocType(e.target.value)} required>
+              {docTypes.map(doc => (
+                <option key={doc.id} value={doc.id}>{doc.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>2. Select AI Model:</label>
+            <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} required>
+              {aiModels.map(model => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div style={{ marginTop: '20px' }}>
-          <label>2. Provide Additional Context (Manual RAG):</label><br/>
+
+        <div className="form-group">
+          <label>3. Upload Document:</label>
+          <input type="file" onChange={handleFileChange} required />
+        </div>
+        
+        <div className="form-group">
+          <label>4. Provide Additional Context (e.g., Job Description):</label>
           <textarea
             rows="8"
-            cols="80"
             value={ragText}
             onChange={(e) => setRagText(e.target.value)}
-            placeholder="e.g., Our company's key strengths are X and Y..."
           />
         </div>
-        <button type="submit" disabled={isLoading} style={{ marginTop: '10px' }}>
-          {isLoading ? 'Analyzing...' : 'Analyze Document'}
+
+        <button type="submit" disabled={isLoading || !selectedDocType || !selectedModel}>
+          {isLoading ? loadingMessage : 'Analyze Document'}
         </button>
       </form>
 

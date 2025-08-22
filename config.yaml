@@ -1,0 +1,47 @@
+# config.yaml
+
+api_endpoints:
+  abbyy:
+    base_url: "https://vantage-us.abbyy.com"
+    auth_endpoint: "/auth2/connect/token"
+    transactions_endpoint: "/api/publicapi/v1/transactions"
+  google_gemini:
+    base_url: "https://generativelanguage.googleapis.com"
+    generate_content_path: "/v1beta/models/{model_name}:generateContent"
+
+# This section now points directly to Vault secrets
+providers:
+  abbyy:
+    vault_mount_point: "kv"
+    vault_secret_path: "users/mark.christian"  # Note: 'kv' is removed from here
+    client_id_vault_key: "abbyy_client_id"
+    client_secret_vault_key: "abbyy_client_secret"
+  google:
+    vault_mount_point: "kv"
+    vault_secret_path: "users/mark.christian"
+    api_key_vault_key: "gemini_api_key"
+  openai:
+    vault_mount_point: "kv"
+    vault_secret_path: "users/mark.christian"
+    api_key_vault_key: "openai_api_key"
+
+document_types:
+  - id: tender_spec
+    name: Tender Specification
+    abbyy_skill_id: "d539b90e-220d-481e-8774-f34f4b1d2134" # Your Skill ID for tenders
+    prompt_template: "prompts/tender_prompt.txt"
+  - id: resume_cv
+    name: Resume / CV
+    abbyy_skill_id: "1f4c70cc-c1f4-4d6c-a249-ec205e3943e8" # ID for the new skill you train in ABBYY
+    prompt_template: "prompts/resume_prompt.txt"
+
+ai_models:
+  - id: gemini-1.5-flash-latest
+    name: "Gemini 1.5 Flash (Google)"
+    provider: "google"  
+  - id: gemini-1.5-pro-latest
+    name: "Gemini 1.5 Pro (Google)"
+    provider: "google"
+  - id: gpt-4o
+    name: "GPT-4o (OpenAI)"
+    provider: "openai"
