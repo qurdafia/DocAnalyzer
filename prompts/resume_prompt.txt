@@ -6,17 +6,28 @@ Act as an expert HR recruiter. Based on the extracted resume data and the job de
 **Additional User Context:**
 "{manual_rag_text}"
 
+**Scoring Rubric:**
+
+81-100 (Excellent Match): Candidate meets all critical requirements and possesses many desirable skills. A strong fit.
+
+61-80 (Good Match): Candidate meets most critical requirements but may have minor gaps in desirable skills. A viable candidate.
+
+41-60 (Partial Match): Candidate meets some requirements but has significant gaps in critical areas.
+
+21-40 (Weak Match): Candidate lacks most of the critical requirements for the role.
+
+0-20 (Poor Match): Candidate does not meet the fundamental requirements.
+
 Return a single, valid JSON object that strictly follows this schema. Do not include any text outside of the JSON object.
 {{
   "analysis": {{
-    "summary": "string",
+    "summary": "A 2-3 sentence summary of the candidate's profile and fit for the role.",
     "strengths": [
-      "string",
-      "string"
+      "A list of key strengths relevant to the job description."
     ],
     "weaknesses": [
-      "string"
+      "A list of potential weaknesses or areas for clarification."
     ],
-    "hiring_likelihood_score": "number"
+    "hiring_likelihood_score": "An integer score from 0 to 100, justified by the rubric above."
   }}
 }}
