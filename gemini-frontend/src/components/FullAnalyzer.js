@@ -143,6 +143,49 @@ function FullAnalyzer({ vaultToken }) {
       yPosition += 5;
       addText(proposal.introduction, 11, 'normal');
       // ... (rest of the detailed proposal PDF logic from before)
+      // Analysis Section
+      if (proposal.analysis) {
+        addText('Analysis', 14, 'bold');
+        if (typeof proposal.analysis === 'string') {
+          addText(proposal.analysis, 11, 'normal');
+        } else if (typeof proposal.analysis === 'object') {
+          addText(`Data Relevance: ${proposal.analysis.data_relevance}`, 11, 'normal');
+          addText(`Data Quality: ${proposal.analysis.data_quality}`, 11, 'normal');
+          addText(`Limitations: ${proposal.analysis.limitations}`, 11, 'normal');
+        }
+        yPosition += 10;
+      }
+    
+      // Proposed Solution Section
+      if (proposal.proposed_solution) {
+        addText('Proposed Solution', 14, 'bold');
+        if (typeof proposal.proposed_solution === 'string') {
+          addText(proposal.proposed_solution, 11, 'normal');
+        } else if (typeof proposal.proposed_solution === 'object') {
+          addText(proposal.proposed_solution.methodology, 11, 'normal');
+          if (Array.isArray(proposal.proposed_solution.steps)) {
+            proposal.proposed_solution.steps.forEach(step => {
+              // Remove markdown bolding for PDF
+              addText(`• ${step.replace(/\*\*/g, '')}`, 11, 'normal', 5);
+            });
+          }
+          addText(`Technology: ${proposal.proposed_solution.technology}`, 11, 'normal');
+        }
+        yPosition += 10;
+      }
+
+      // Budget and Conclusion
+      if(proposal.budget) {
+          addText('Budget', 14, 'bold');
+          const budgetText = typeof proposal.budget === 'string' ? proposal.budget : (proposal.budget.cost || `Total: $${proposal.budget.cost}`);
+          addText(budgetText, 11, 'normal');
+          yPosition += 5;
+      }
+      if(proposal.conclusion) {
+          addText('Conclusion', 14, 'bold');
+          addText(proposal.conclusion, 11, 'normal');
+      }
+    
       doc.save('Tender_Analysis_Proposal.pdf');
 
     } else if (analysis.analysis) {
