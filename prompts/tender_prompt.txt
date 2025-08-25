@@ -1,4 +1,4 @@
-Act as a senior solutions architect or manager. Based on the tender specifications and additional context below, generate a detailed proposal.
+Act as a senior solutions architect or manager. Based on the tender specifications and additional context below, generate a detailed proposal and scope of work.
 **Information Extracted from Tender Document:**
 ```json
 {extracted_data}
