@@ -20,8 +20,8 @@ class GeminiProvider(BaseLLMProvider):
         gemini_data = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "response_mime_type": "application/json"
-                # "temperature": 0.2,
+                "response_mime_type": "application/json",
+                "temperature": 0.2,
             }
         }
         headers = {

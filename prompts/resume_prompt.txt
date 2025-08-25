@@ -21,7 +21,7 @@ Act as an expert HR recruiter. Based on the extracted resume data and the job de
 Return a single, valid JSON object that strictly follows this schema. Do not include any text outside of the JSON object.
 {{
   "analysis": {{
-    "summary": "A 2-3 sentence summary of the candidate's profile and fit for the role.",
+    "summary": "State the full name of the candidate. A 2-3 sentence summary of the candidate's profile and fit for the role.",
     "strengths": [
       "A list of key strengths relevant to the job description."
     ],
