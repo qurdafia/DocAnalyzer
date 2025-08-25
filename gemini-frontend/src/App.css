@@ -52,6 +52,7 @@ main {
 /* 5. Card/Container Styles */
 .login-container,
 .analyzer-container {
+  line-height: 1.5rem;
   max-width: 800px;
   margin: 2rem auto;
   padding: 2.5rem;
@@ -203,6 +204,7 @@ button:disabled {
   .analyzer-container {
     padding: 1.5rem;
     margin: 1rem auto;
+    line-height: 1.5rem;
   }
   .form-group-row {
     flex-direction: column;
